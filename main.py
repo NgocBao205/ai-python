@@ -76,6 +76,44 @@ async def check_spoiler(request: ReviewRequest):
         print(f"Lỗi AI: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Lỗi AI: {str(e)}")
 
+# Định nghĩa dữ liệu Node.js sẽ gửi sang
+class ChatRequest(BaseModel):
+    question: str
+    context_data: str # Đây là dữ liệu thật từ DB do Node.js mớm cho AI
+
+@app.post("/api/ai/chat")
+async def chat_cskh(request: ChatRequest):
+    try:
+        active_model = get_bulletproof_model()
+        if not active_model:
+            raise ValueError("Hệ thống AI đang bảo trì.")
+            
+        prompt = f"""
+        Bạn là nhân viên chăm sóc khách hàng cực kỳ thân thiện của rạp chiếu phim.
+        Nhiệm vụ: Trả lời câu hỏi của khách hàng CHỈ DỰA VÀO phần "Dữ liệu rạp phim" bên dưới.
+        Nếu khách hỏi ngoài lề hoặc dữ liệu không có, hãy lịch sự xin lỗi và nói không biết.
+        TUYỆT ĐỐI KHÔNG tự bịa ra hoặc lấy dữ liệu trên mạng. Trả lời ngắn gọn, súc tích.
+        
+        [Dữ liệu rạp phim]:
+        {request.context_data}
+        
+        [Câu hỏi của khách]: "{request.question}"
+        """
+        
+        chat_completion = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=active_model,
+            temperature=0.3, # Tăng một chút sáng tạo để AI nói chuyện tự nhiên, có cảm xúc hơn
+        )
+        
+        answer = chat_completion.choices[0].message.content.strip()
+        
+        return {"answer": answer, "source": f"groq_{active_model}"}
+
+    except Exception as e:
+        print(f"Lỗi AI Chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Lỗi AI Chat: {str(e)}")
+
 @app.get("/")
 def read_root():
     return {"message": "🚀 AI Microservice (Chống đạn) đang hoạt động!"}
